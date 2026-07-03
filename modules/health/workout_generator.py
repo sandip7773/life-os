@@ -21,9 +21,9 @@ from datetime import date
 # YOUR PROFILE — edit these lines, nothing else needs to change
 # ---------------------------------------------------------------------------
 PROFILE = {
-    "goal": "build muscle, lose a bit of fat",       # e.g. strength, muscle, fat loss, endurance
+    "goal": "gain muscle mass",       # e.g. strength, muscle, fat loss, endurance
     "experience": "intermediate",                    # beginner / intermediate / advanced
-    "days_per_week": 4,
+    "days_per_week": 3,
     "session_length_minutes": 60,
     "equipment": "commercial gym (full equipment)",  # or "dumbbells + bands at home", etc.
     "constraints": "none",                           # injuries, movements to avoid, etc.
