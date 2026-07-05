@@ -45,12 +45,10 @@ Create a weekly workout plan for this person:
 - Preferences: {profile["preferences"]}
 
 Format the plan in clean Markdown:
-1. One short paragraph explaining the weekly structure and why it fits the goal.
-2. A section per training day with a table: exercise, sets, reps, rest, and a one-line form cue.
-3. A short "Progression" section: how to add weight/reps week over week.
-4. A short "If you miss a day" section with the simplest recovery rule.
+1. One short paragraph (2–3 sentences) explaining the weekly structure and why it fits the goal.
+2. A section per training day with a table: exercise, sets × reps, rest.
 
-Keep it practical and specific. No generic filler, no disclaimers.
+Be terse. Under 1800 characters total. No generic filler, no disclaimers.
 """
 
 
