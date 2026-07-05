@@ -70,6 +70,46 @@ and merging later is cheap at this data volume.
 
 ---
 
+## Phase 3 — Workout generator endgame  (BUILT — Sandi's live verification pending)
+
+Status: all three slices coded, tested at module level, committed on
+2026-07-05. DB round-trips verified (profile create/update/validate,
+plan generation + HTML conversion, dashboard headless run via AppTest).
+Remaining: Sandi's live pass — Telegram /workout + /profile rendering,
+dashboard in browser.
+
+Agreed with Sandi on 2026-07-05. Goal: take the workout generator to its
+best version before starting other domains. Long-term picture: dashboard =
+viewing/managing, Telegram = quick interactions.
+
+- **Slice 1 — Telegram-friendly output**: prompt drops tables in favour of
+  bold day headers + one line per exercise; bot converts `**bold**` to
+  Telegram HTML when sending. Stored blob stays simple markdown (renders
+  fine in the dashboard).
+- **Slice 2 — Editable profile**: single-row `profiles` table (jsonb blob),
+  `modules/health/profile.py` (get/update with field validation),
+  `/profile` command (view / set field). `/workout` generates from the
+  stored profile.
+
+  ```sql
+  create table profiles (
+    id         uuid primary key default gen_random_uuid(),
+    updated_at timestamptz not null default now(),
+    data       jsonb not null
+  );
+  alter table profiles enable row level security;
+  ```
+- **Slice 3 — Streamlit dashboard v1 (local only)**: `dashboard/app.py`,
+  tabs Health / Meals / Money / Career / Mentorship (only Health real:
+  rendered plans newest-first + profile form). Reuses shared/db and
+  modules/health directly.
+
+Deferred from this phase (candidates for later): plan refinement via
+feedback, session logging + progression-aware generation, `/plans` history
+in chat, n8n Monday auto-plan.
+
+---
+
 ## Next candidates (direction only — NOT planned, discuss with Sandi first)
 
 - Meal + macro logging (free-text parsed by LLM + quick-pick; structured
