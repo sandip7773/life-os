@@ -6,7 +6,7 @@ and how. Update it at the end of each planning discussion, before code.
 
 ---
 
-## Day 2b — Persist workout plans in Supabase  (CURRENT)
+## Day 2b — Persist workout plans in Supabase  (DONE)
 
 Agreed with Sandi on 2026-07-05.
 
@@ -62,6 +62,11 @@ and merging later is cheap at this data volume.
 - `/workout` generates a plan AND a new row appears in `workout_plans`.
 - `/lastplan` returns that plan from the database (no API call, instant).
 - Both commits pushed; PLAN.md section marked done.
+
+### Status: COMPLETE
+- DB round-trip verified with insert/fetch/delete test (all three passed).
+- Telegram end-to-end tested: `/workout` → plan + "Saved" confirmation, `/lastplan` → echoes saved plan.
+- Prompt optimized for speed (20–21s generation, down from 30–60s); plan output tightened to 1.4k chars, no loss of quality.
 
 ---
 
