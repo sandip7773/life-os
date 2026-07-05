@@ -1,6 +1,6 @@
 """
-Life OS · Telegram bot · Day 2a
-Thin dispatch layer. One command today: /workout.
+Life OS · Telegram bot · Day 2b
+Thin dispatch layer. Commands: /workout (generate + save), /lastplan (retrieve).
 """
 
 import os
@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from modules.health.workout_generator import PROFILE, build_prompt, generate_plan
+from modules.health.workout_generator import PROFILE, MODEL, build_prompt, generate_plan
+from modules.health.storage import save_workout_plan, get_latest_workout_plan
 
 load_dotenv()  # reads .env into environment variables
 
@@ -20,9 +21,15 @@ logging.basicConfig(
 log = logging.getLogger("life-os")
 
 
+async def reply_chunked(update: Update, text: str) -> None:
+    # Telegram messages cap at 4096 chars. Chunk if needed.
+    for i in range(0, len(text), 4000):
+        await update.message.reply_text(text[i:i + 4000])
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Life OS is up. Try /workout to generate a weekly plan."
+        "Life OS is up. /workout generates a weekly plan, /lastplan shows the last saved one."
     )
 
 
@@ -30,9 +37,24 @@ async def workout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Generating your plan, one moment...")
     prompt = build_prompt(PROFILE)
     plan = generate_plan(prompt)
-    # Telegram messages cap at 4096 chars. Chunk if needed.
-    for i in range(0, len(plan), 4000):
-        await update.message.reply_text(plan[i:i + 4000])
+    await reply_chunked(update, plan)
+    try:
+        save_workout_plan(plan, PROFILE, MODEL)
+        await update.message.reply_text("Saved. /lastplan brings it back any time.")
+    except Exception:
+        log.exception("Failed to save workout plan")
+        await update.message.reply_text(
+            "Heads up: the plan above could not be saved to the database."
+        )
+
+
+async def lastplan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    row = get_latest_workout_plan()
+    if row is None:
+        await update.message.reply_text("No saved plans yet. /workout generates one.")
+        return
+    header = f"Last plan — saved {row['created_at'][:10]}\n\n"
+    await reply_chunked(update, header + row["plan_markdown"])
 
 
 def main() -> None:
@@ -43,8 +65,9 @@ def main() -> None:
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("workout", workout))
+    app.add_handler(CommandHandler("lastplan", lastplan))
 
-    log.info("Bot starting. Send /workout in Telegram.")
+    log.info("Bot starting. Send /workout or /lastplan in Telegram.")
     app.run_polling()
 
 
