@@ -2,13 +2,12 @@
 Life OS · Health module · Day 1
 Standalone workout plan generator. No bot, no database, no orchestrator.
 
-Usage:
+Usage (from the repo root, so shared/ resolves):
     1. Edit PROFILE below (this IS the interface for now).
-    2. export ANTHROPIC_API_KEY=sk-ant-...
-    3. pip install anthropic
-    4. python workout_generator.py
+    2. Make sure ANTHROPIC_API_KEY is set in the environment / .env
+    3. python -m modules.health.workout_generator
 
-    Optional: python workout_generator.py --dry-run   (prints the prompt, no API call)
+    Optional: python -m modules.health.workout_generator --dry-run   (prints the prompt, no API call)
 
 Output: plan printed to terminal + saved as workout_plan_YYYY-MM-DD.md
 """
@@ -56,15 +55,9 @@ Keep it practical and specific. No generic filler, no disclaimers.
 
 
 def generate_plan(prompt: str) -> str:
-    from anthropic import Anthropic  # lazy import so --dry-run works without the package
+    from shared.llm import generate  # lazy import so --dry-run works without the anthropic package
 
-    client = Anthropic()  # reads ANTHROPIC_API_KEY from the environment
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=3000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return "".join(block.text for block in response.content if block.type == "text")
+    return generate(prompt, model=MODEL)
 
 
 def main() -> None:
