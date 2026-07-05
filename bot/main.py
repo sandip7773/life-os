@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from modules.health.workout_generator import PROFILE, MODEL, build_prompt, generate_plan
+from modules.health.workout_generator import MODEL, build_prompt, generate_plan
 from modules.health.storage import save_workout_plan, get_latest_workout_plan
+from modules.health.profile import get_profile, update_field, ALLOWED_FIELDS
 
 load_dotenv()  # reads .env into environment variables
 
@@ -45,23 +46,49 @@ async def reply_chunked(update: Update, text: str) -> None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Life OS is up. /workout generates a weekly plan, /lastplan shows the last saved one."
+        "Life OS is up. /workout generates a weekly plan, /lastplan shows the "
+        "last saved one, /profile views or edits your training profile."
     )
 
 
 async def workout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Generating your plan, one moment...")
-    prompt = build_prompt(PROFILE)
-    plan = generate_plan(prompt)
+    profile = get_profile()
+    plan = generate_plan(build_prompt(profile))
     await reply_chunked(update, md_to_telegram_html(plan))
     try:
-        save_workout_plan(plan, PROFILE, MODEL)
+        save_workout_plan(plan, profile, MODEL)
         await update.message.reply_text("Saved. /lastplan brings it back any time.")
     except Exception:
         log.exception("Failed to save workout plan")
         await update.message.reply_text(
             "Heads up: the plan above could not be saved to the database."
         )
+
+
+async def profile_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    args = context.args
+    if not args:
+        p = get_profile()
+        lines = ["<b>Your profile</b>"]
+        lines += [f"{k}: {html.escape(str(v))}" for k, v in p.items()]
+        lines.append("\nChange one with: /profile field value")
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        return
+    if len(args) < 2:
+        await update.message.reply_text(
+            "Usage: /profile field value\nFields: " + ", ".join(ALLOWED_FIELDS)
+        )
+        return
+    field, value = args[0], " ".join(args[1:])
+    try:
+        data = update_field(field, value)
+    except ValueError as e:
+        await update.message.reply_text(str(e))
+        return
+    await update.message.reply_text(
+        f"Updated {field} = {data[field]}. /workout uses this from now on."
+    )
 
 
 async def lastplan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -82,6 +109,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("workout", workout))
     app.add_handler(CommandHandler("lastplan", lastplan))
+    app.add_handler(CommandHandler("profile", profile_cmd))
 
     log.info("Bot starting. Send /workout or /lastplan in Telegram.")
     app.run_polling()

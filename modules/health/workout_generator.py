@@ -3,7 +3,8 @@ Life OS · Health module · Day 1
 Standalone workout plan generator. No bot, no database, no orchestrator.
 
 Usage (from the repo root, so shared/ resolves):
-    1. Edit PROFILE below (this IS the interface for now).
+    1. Profile comes from the DB (edit via /profile in Telegram or the
+       dashboard); falls back to profile.DEFAULT_PROFILE without a DB.
     2. Make sure ANTHROPIC_API_KEY is set in the environment / .env
     3. python -m modules.health.workout_generator
 
@@ -15,19 +16,6 @@ Output: plan printed to terminal + saved as workout_plan_YYYY-MM-DD.md
 import os
 import sys
 from datetime import date
-
-# ---------------------------------------------------------------------------
-# YOUR PROFILE — edit these lines, nothing else needs to change
-# ---------------------------------------------------------------------------
-PROFILE = {
-    "goal": "gain muscle mass",       # e.g. strength, muscle, fat loss, endurance
-    "experience": "intermediate",                    # beginner / intermediate / advanced
-    "days_per_week": 3,
-    "session_length_minutes": 60,
-    "equipment": "commercial gym (full equipment)",  # or "dumbbells + bands at home", etc.
-    "constraints": "none",                           # injuries, movements to avoid, etc.
-    "preferences": "enjoy compound lifts, dislike long cardio sessions",
-}
 
 MODEL = "claude-sonnet-4-6"
 
@@ -61,7 +49,9 @@ def generate_plan(prompt: str) -> str:
 
 
 def main() -> None:
-    prompt = build_prompt(PROFILE)
+    from modules.health.profile import get_profile
+
+    prompt = build_prompt(get_profile())
 
     if "--dry-run" in sys.argv:
         print(prompt)

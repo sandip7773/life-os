@@ -31,6 +31,12 @@ def insert(table: str, row: dict) -> dict:
     return result.data[0]
 
 
+def update(table: str, row_id: str, fields: dict) -> dict:
+    """Update one row by id; returns the updated row."""
+    result = _db().table(table).update(fields).eq("id", row_id).execute()
+    return result.data[0]
+
+
 def latest(table: str, order_col: str = "created_at") -> dict | None:
     """Newest row in a table by order_col, or None if the table is empty."""
     result = _db().table(table).select("*").order(order_col, desc=True).limit(1).execute()
