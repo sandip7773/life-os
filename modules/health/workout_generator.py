@@ -44,10 +44,12 @@ Create a weekly workout plan for this person:
 - Constraints / injuries: {profile["constraints"]}
 - Preferences: {profile["preferences"]}
 
-Format the plan in clean Markdown:
+Format the plan as a chat message that will be read on a phone:
 1. One short paragraph (2–3 sentences) explaining the weekly structure and why it fits the goal.
-2. A section per training day with a table: exercise, sets × reps, rest.
+2. For each training day: a **bold day header** line, then one line per exercise, like:
+   Bench Press — 4×6-8, rest 2-3 min
 
+Bold (**like this**) is the ONLY formatting allowed. No # headings, no tables, no pipes, no bullet markers.
 Be terse. Under 1800 characters total. No generic filler, no disclaimers.
 """
 

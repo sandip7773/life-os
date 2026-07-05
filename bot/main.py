@@ -3,8 +3,10 @@ Life OS · Telegram bot · Day 2b
 Thin dispatch layer. Commands: /workout (generate + save), /lastplan (retrieve).
 """
 
+import html
 import os
 import logging
+import re
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -21,10 +23,24 @@ logging.basicConfig(
 log = logging.getLogger("life-os")
 
 
+def md_to_telegram_html(text: str) -> str:
+    # Plans use **bold** as their only markup. Escape everything else for
+    # Telegram's HTML mode, then turn the bold markers into <b> tags.
+    escaped = html.escape(text)
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+
+
 async def reply_chunked(update: Update, text: str) -> None:
-    # Telegram messages cap at 4096 chars. Chunk if needed.
-    for i in range(0, len(text), 4000):
-        await update.message.reply_text(text[i:i + 4000])
+    # Telegram messages cap at 4096 chars. Chunk on line boundaries so a
+    # <b>…</b> pair (always within one line) never gets split.
+    chunk = ""
+    for line in text.split("\n"):
+        if len(chunk) + len(line) + 1 > 4000:
+            await update.message.reply_text(chunk, parse_mode="HTML")
+            chunk = ""
+        chunk += line + "\n"
+    if chunk.strip():
+        await update.message.reply_text(chunk, parse_mode="HTML")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -37,7 +53,7 @@ async def workout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Generating your plan, one moment...")
     prompt = build_prompt(PROFILE)
     plan = generate_plan(prompt)
-    await reply_chunked(update, plan)
+    await reply_chunked(update, md_to_telegram_html(plan))
     try:
         save_workout_plan(plan, PROFILE, MODEL)
         await update.message.reply_text("Saved. /lastplan brings it back any time.")
@@ -53,8 +69,8 @@ async def lastplan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if row is None:
         await update.message.reply_text("No saved plans yet. /workout generates one.")
         return
-    header = f"Last plan — saved {row['created_at'][:10]}\n\n"
-    await reply_chunked(update, header + row["plan_markdown"])
+    header = f"**Last plan — saved {row['created_at'][:10]}**\n\n"
+    await reply_chunked(update, md_to_telegram_html(header + row["plan_markdown"]))
 
 
 def main() -> None:
