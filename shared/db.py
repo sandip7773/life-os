@@ -41,3 +41,9 @@ def latest(table: str, order_col: str = "created_at") -> dict | None:
     """Newest row in a table by order_col, or None if the table is empty."""
     result = _db().table(table).select("*").order(order_col, desc=True).limit(1).execute()
     return result.data[0] if result.data else None
+
+
+def list_rows(table: str, order_col: str = "created_at", limit: int = 50) -> list[dict]:
+    """Newest-first rows from a table, up to limit."""
+    result = _db().table(table).select("*").order(order_col, desc=True).limit(limit).execute()
+    return result.data
