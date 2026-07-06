@@ -110,6 +110,42 @@ in chat, n8n Monday auto-plan.
 
 ---
 
+## Phase 4 — Natural-language + button interface  (CURRENT)
+
+Agreed with Sandi on 2026-07-06. Slash commands felt too rigid; adding a
+parallel natural-language + button path for discoverability and ease.
+
+Decisions:
+- **Commands stay** — natural language is additive, not a replacement.
+- **Classifier: Claude Haiku** (`claude-haiku-4-5-20251001`), not
+  GPT-4o-mini/Gemini as CLAUDE.md's stack section originally sketched.
+  Reason: no new API key needed today; only one domain (Health) exists so
+  routing is simple enough for a same-provider model. Revisit the model
+  choice once a second domain adds real routing complexity.
+- **Natural language reaches free-form profile edits** ("I want to train 4
+  days a week" → `days_per_week=4`), not just command routing — the
+  riskier extraction is protected by a confirm/cancel button before
+  anything is written, and reuses `update_field()`'s existing validation.
+
+This is effectively building `orchestrator/` now (accelerated from the
+rough roadmap) — the locked hub-and-spoke rule itself is unchanged.
+
+- **Slice 1 — classifier**: `shared/llm.py` gains `generate_json()` (forced
+  tool-use for reliable structured output); new `orchestrator/router.py`
+  `classify(text)` → intent + optional field/value. Verified standalone
+  against sample messages before any bot wiring.
+- **Slice 2 — wire into bot**: `bot/main.py` refactors command bodies into
+  shared text-producing helpers; new free-text `MessageHandler` routes
+  through the classifier; profile edits go through a confirm button.
+- **Slice 3 — button menu**: `/start` gets an inline keyboard (Generate
+  workout / Last plan / View profile); same buttons offered as a recovery
+  path when the classifier returns "unknown".
+
+Deferred: generalizing the classifier's field-registry beyond Health (only
+matters once a second domain exists).
+
+---
+
 ## Next candidates (direction only — NOT planned, discuss with Sandi first)
 
 - Meal + macro logging (free-text parsed by LLM + quick-pick; structured
