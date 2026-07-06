@@ -152,6 +152,44 @@ matters once a second domain exists).
 
 ---
 
+## Phase 5 — Structured plans, dashboard editing, session logging, history Q&A  (CURRENT)
+
+Agreed with Sandi on 2026-07-06, after she flagged the project felt
+off-track: everything built so far was "type a request → get a one-shot
+AI document," with nothing remembering her actual training or answering
+questions about it. Clarified direction: **dashboard = planning surface**
+(AI drafts, she edits per-exercise), **bot = logging + natural-language
+retrieval**, grounded in real data. Workouts get this end-to-end before
+Meals gets the same pattern.
+
+Core change: `workout_plans` gains a `plan_data jsonb` column (structured
+source of truth: summary + days[] with weekday + exercises[]) alongside
+the existing `plan_markdown` (now auto-rendered from `plan_data` at save
+time, not written separately). `weekday` is explicit per day so "what am I
+doing today" is a deterministic lookup, no LLM call needed.
+
+- **Slice 1**: structured generation (`generate_json`, reused from Phase
+  4) + `modules/health/render.py` (HTML for Telegram, markdown for
+  dashboard) + storage updated to write both columns.
+- **Slice 2**: dashboard edits the latest plan per-exercise (`st.
+  data_editor` per day); older plans stay read-only.
+- **Slice 3**: new `workout_logs` table (logged-entries shape); `log_session`
+  intent extracts exercises from free text; bot logs immediately with an
+  Undo button (same confirm-button pattern as Phase 4's profile edits).
+- **Slice 4**: `whats_today` (deterministic weekday match) and
+  `query_history` (recent logs + question fed to `shared.llm.generate()`,
+  answered only from the given data) intents; dashboard progress chart
+  (`st.line_chart` of weight over time per exercise, picked from a
+  dropdown of logged exercise names).
+
+Manual SQL for Sandi: `alter table workout_plans add column plan_data
+jsonb;` (slice 1), create `workout_logs` (slice 3).
+
+Full plan with schemas and file lists:
+`C:\Users\sandi\.claude\plans\while-i-do-that-elegant-cupcake.md`
+
+---
+
 ## Next candidates (direction only — NOT planned, discuss with Sandi first)
 
 - Meal + macro logging (free-text parsed by LLM + quick-pick; structured

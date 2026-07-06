@@ -24,6 +24,7 @@ from telegram.ext import (
 from modules.health.workout_generator import MODEL, build_prompt, generate_plan
 from modules.health.storage import save_workout_plan, get_latest_workout_plan
 from modules.health.profile import get_profile, update_field, validate_field, ALLOWED_FIELDS
+from modules.health.render import render_plan_html
 from orchestrator.router import classify
 
 load_dotenv()  # reads .env into environment variables
@@ -73,10 +74,10 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
 async def _run_workout(update: Update) -> None:
     await update.effective_message.reply_text("Generating your plan, one moment...")
     profile = get_profile()
-    plan = generate_plan(build_prompt(profile))
-    await reply_chunked(update, md_to_telegram_html(plan))
+    plan_data = generate_plan(build_prompt(profile))
+    await reply_chunked(update, render_plan_html(plan_data))
     try:
-        save_workout_plan(plan, profile, MODEL)
+        save_workout_plan(plan_data, profile, MODEL)
         await update.effective_message.reply_text("Saved. /lastplan brings it back any time.")
     except Exception:
         log.exception("Failed to save workout plan")
@@ -90,8 +91,13 @@ async def _run_lastplan(update: Update) -> None:
     if row is None:
         await update.effective_message.reply_text("No saved plans yet. /workout generates one.")
         return
-    header = f"**Last plan — saved {row['created_at'][:10]}**\n\n"
-    await reply_chunked(update, md_to_telegram_html(header + row["plan_markdown"]))
+    date_str = row["created_at"][:10]
+    if row.get("plan_data"):
+        text = f"<b>Last plan — saved {date_str}</b>\n\n" + render_plan_html(row["plan_data"])
+    else:
+        # legacy row saved before Phase 5's structured plans
+        text = md_to_telegram_html(f"**Last plan — saved {date_str}**\n\n" + row["plan_markdown"])
+    await reply_chunked(update, text)
 
 
 async def _run_profile_view(update: Update) -> None:
