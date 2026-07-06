@@ -1,6 +1,9 @@
 """
-Life OS · Telegram bot · Day 2b
-Thin dispatch layer. Commands: /workout (generate + save), /lastplan (retrieve).
+Life OS · Telegram bot · Phase 4
+Thin dispatch layer. Slash commands (/workout, /lastplan, /profile) and a
+free-text path (classified by orchestrator/router.py) both reach the same
+handler logic below. Buttons cover the /start menu and profile-edit
+confirmation.
 """
 
 import html
@@ -8,12 +11,20 @@ import os
 import logging
 import re
 from dotenv import load_dotenv
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from modules.health.workout_generator import MODEL, build_prompt, generate_plan
 from modules.health.storage import save_workout_plan, get_latest_workout_plan
-from modules.health.profile import get_profile, update_field, ALLOWED_FIELDS
+from modules.health.profile import get_profile, update_field, validate_field, ALLOWED_FIELDS
+from orchestrator.router import classify
 
 load_dotenv()  # reads .env into environment variables
 
@@ -34,46 +45,113 @@ def md_to_telegram_html(text: str) -> str:
 async def reply_chunked(update: Update, text: str) -> None:
     # Telegram messages cap at 4096 chars. Chunk on line boundaries so a
     # <b>…</b> pair (always within one line) never gets split.
+    # effective_message works for both regular messages and button presses.
     chunk = ""
     for line in text.split("\n"):
         if len(chunk) + len(line) + 1 > 4000:
-            await update.message.reply_text(chunk, parse_mode="HTML")
+            await update.effective_message.reply_text(chunk, parse_mode="HTML")
             chunk = ""
         chunk += line + "\n"
     if chunk.strip():
-        await update.message.reply_text(chunk, parse_mode="HTML")
+        await update.effective_message.reply_text(chunk, parse_mode="HTML")
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "Life OS is up. /workout generates a weekly plan, /lastplan shows the "
-        "last saved one, /profile views or edits your training profile."
-    )
+def _menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Generate workout", callback_data="menu_workout"),
+            InlineKeyboardButton("Last plan", callback_data="menu_lastplan"),
+        ],
+        [InlineKeyboardButton("View profile", callback_data="menu_profile")],
+    ])
 
 
-async def workout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Generating your plan, one moment...")
+# ---------------------------------------------------------------------------
+# Core actions — shared by slash commands, free text, and buttons
+# ---------------------------------------------------------------------------
+
+async def _run_workout(update: Update) -> None:
+    await update.effective_message.reply_text("Generating your plan, one moment...")
     profile = get_profile()
     plan = generate_plan(build_prompt(profile))
     await reply_chunked(update, md_to_telegram_html(plan))
     try:
         save_workout_plan(plan, profile, MODEL)
-        await update.message.reply_text("Saved. /lastplan brings it back any time.")
+        await update.effective_message.reply_text("Saved. /lastplan brings it back any time.")
     except Exception:
         log.exception("Failed to save workout plan")
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "Heads up: the plan above could not be saved to the database."
         )
+
+
+async def _run_lastplan(update: Update) -> None:
+    row = get_latest_workout_plan()
+    if row is None:
+        await update.effective_message.reply_text("No saved plans yet. /workout generates one.")
+        return
+    header = f"**Last plan — saved {row['created_at'][:10]}**\n\n"
+    await reply_chunked(update, md_to_telegram_html(header + row["plan_markdown"]))
+
+
+async def _run_profile_view(update: Update) -> None:
+    p = get_profile()
+    lines = ["<b>Your profile</b>"]
+    lines += [f"{k}: {html.escape(str(v))}" for k, v in p.items()]
+    lines.append("\nChange one with: /profile field value — or just tell me in your own words.")
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def _propose_profile_update(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, field: str | None, value: str | None
+) -> None:
+    if field is None or value is None:
+        await _send_fallback_menu(update, prefix="I couldn't tell what to change. ")
+        return
+    try:
+        coerced = validate_field(field, value)
+    except ValueError as e:
+        await update.effective_message.reply_text(str(e))
+        return
+    context.user_data["pending_profile_update"] = {"field": field, "value": coerced}
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Yes", callback_data="profile_confirm_yes"),
+        InlineKeyboardButton("No", callback_data="profile_confirm_no"),
+    ]])
+    await update.effective_message.reply_text(f"Set {field} to {coerced}?", reply_markup=keyboard)
+
+
+async def _send_fallback_menu(update: Update, prefix: str = "") -> None:
+    await update.effective_message.reply_text(
+        prefix + "Not sure what you meant — here's what I can do:",
+        reply_markup=_menu_keyboard(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Slash commands
+# ---------------------------------------------------------------------------
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Life OS is up. Tell me what you want in your own words, or use "
+        "/workout, /lastplan, /profile.",
+        reply_markup=_menu_keyboard(),
+    )
+
+
+async def workout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _run_workout(update)
+
+
+async def lastplan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _run_lastplan(update)
 
 
 async def profile_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     if not args:
-        p = get_profile()
-        lines = ["<b>Your profile</b>"]
-        lines += [f"{k}: {html.escape(str(v))}" for k, v in p.items()]
-        lines.append("\nChange one with: /profile field value")
-        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        await _run_profile_view(update)
         return
     if len(args) < 2:
         await update.message.reply_text(
@@ -91,13 +169,50 @@ async def profile_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-async def lastplan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    row = get_latest_workout_plan()
-    if row is None:
-        await update.message.reply_text("No saved plans yet. /workout generates one.")
-        return
-    header = f"**Last plan — saved {row['created_at'][:10]}**\n\n"
-    await reply_chunked(update, md_to_telegram_html(header + row["plan_markdown"]))
+# ---------------------------------------------------------------------------
+# Free text (classified by the orchestrator) and buttons
+# ---------------------------------------------------------------------------
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    result = classify(update.message.text)
+    intent = result["intent"]
+
+    if intent == "generate_workout":
+        await _run_workout(update)
+    elif intent == "show_last_plan":
+        await _run_lastplan(update)
+    elif intent == "show_profile":
+        await _run_profile_view(update)
+    elif intent == "update_profile":
+        await _propose_profile_update(update, context, result["field"], result["value"])
+    else:
+        await _send_fallback_menu(update)
+
+
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()  # stops the button's loading spinner in Telegram
+    data = query.data
+
+    if data == "menu_workout":
+        await _run_workout(update)
+    elif data == "menu_lastplan":
+        await _run_lastplan(update)
+    elif data == "menu_profile":
+        await _run_profile_view(update)
+    elif data == "profile_confirm_yes":
+        pending = context.user_data.pop("pending_profile_update", None)
+        if pending is None:
+            await update.effective_message.reply_text("Nothing pending to confirm.")
+            return
+        updated = update_field(pending["field"], str(pending["value"]))
+        await update.effective_message.reply_text(
+            f"Updated {pending['field']} = {updated[pending['field']]}. "
+            "/workout uses this from now on."
+        )
+    elif data == "profile_confirm_no":
+        context.user_data.pop("pending_profile_update", None)
+        await update.effective_message.reply_text("Cancelled — no changes made.")
 
 
 def main() -> None:
@@ -110,8 +225,10 @@ def main() -> None:
     app.add_handler(CommandHandler("workout", workout))
     app.add_handler(CommandHandler("lastplan", lastplan))
     app.add_handler(CommandHandler("profile", profile_cmd))
+    app.add_handler(CallbackQueryHandler(handle_button))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    log.info("Bot starting. Send /workout or /lastplan in Telegram.")
+    log.info("Bot starting. Commands, free text, and buttons are all live.")
     app.run_polling()
 
 

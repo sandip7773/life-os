@@ -39,15 +39,21 @@ def get_profile() -> dict:
     return {**DEFAULT_PROFILE, **row["data"]}
 
 
-def update_field(field: str, value: str) -> dict:
-    """Set one profile field (creates the row on first use). Returns the new profile."""
+def validate_field(field: str, value: str):
+    """Check the field name and coerce value to its stored type. Raises ValueError."""
     if field not in ALLOWED_FIELDS:
         raise ValueError(f"Unknown field '{field}'. Fields: {', '.join(ALLOWED_FIELDS)}")
     if field in _INT_FIELDS:
         try:
-            value = int(value)
-        except ValueError:
+            return int(value)
+        except (ValueError, TypeError):
             raise ValueError(f"'{field}' needs a whole number, got '{value}'.")
+    return value
+
+
+def update_field(field: str, value: str) -> dict:
+    """Set one profile field (creates the row on first use). Returns the new profile."""
+    value = validate_field(field, value)
 
     row = db.latest(PROFILES_TABLE, order_col="updated_at")
     if row is None:
