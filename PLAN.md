@@ -110,7 +110,7 @@ in chat, n8n Monday auto-plan.
 
 ---
 
-## Phase 4 — Natural-language + button interface  (CURRENT)
+## Phase 4 — Natural-language + button interface  (DONE)
 
 Agreed with Sandi on 2026-07-06. Slash commands felt too rigid; adding a
 parallel natural-language + button path for discoverability and ease.
@@ -143,6 +143,12 @@ rough roadmap) — the locked hub-and-spoke rule itself is unchanged.
 
 Deferred: generalizing the classifier's field-registry beyond Health (only
 matters once a second domain exists).
+
+### Status: COMPLETE
+- Classifier verified standalone (11/11 sample messages correctly classified).
+- Live Telegram pass by Sandi confirmed: natural language routing, confirm
+  buttons for profile edits, /start menu, unknown-intent fallback, and all
+  original slash commands — all working.
 
 ---
 
