@@ -152,7 +152,14 @@ matters once a second domain exists).
 
 ---
 
-## Phase 5 — Structured plans, dashboard editing, session logging, history Q&A  (CURRENT)
+## Phase 5 — Structured plans, dashboard editing, session logging, history Q&A  (BUILT — Sandi's live pass pending)
+
+Status 2026-07-08: all four slices coded, module-tested, committed.
+Slices 1–2 already live-verified by Sandi (dashboard edit saves; column
+order fix applied). Slices 3–4 verified at module level (classifier
+8/8 and 7/7, DB round-trips, grounded Q&A, chart renders); Sandi's
+Telegram pass pending: log a session, Undo, "what am I doing today",
+history questions, chart in dashboard.
 
 Agreed with Sandi on 2026-07-06, after she flagged the project felt
 off-track: everything built so far was "type a request → get a one-shot
