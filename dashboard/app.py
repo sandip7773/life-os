@@ -98,10 +98,20 @@ with health:
                     if remove_col.button("Remove day", key=f"remove_day_{i}"):
                         remove_day_index = i
 
+                    # Explicit column order: Postgres jsonb re-sorts dict keys
+                    # alphabetically, so without pinning, columns shift after a
+                    # save/reload round-trip.
                     edited_df = st.data_editor(
-                        pd.DataFrame(day["exercises"]),
+                        pd.DataFrame(day["exercises"], columns=["name", "sets", "reps", "rest"]),
                         num_rows="dynamic",
                         width="stretch",
+                        column_order=("name", "sets", "reps", "rest"),
+                        column_config={
+                            "name": st.column_config.TextColumn("Exercise", required=True),
+                            "sets": st.column_config.NumberColumn("Sets", min_value=1, step=1),
+                            "reps": st.column_config.TextColumn("Reps"),
+                            "rest": st.column_config.TextColumn("Rest"),
+                        },
                         key=f"exercises_{i}",
                     )
                     day["exercises"] = _clean_exercises(edited_df)
