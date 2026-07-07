@@ -33,3 +33,26 @@ def update_workout_plan_data(plan_id: str, plan_data: dict) -> dict:
 def get_latest_workout_plan() -> dict | None:
     """Most recently saved plan row, or None if nothing is saved yet."""
     return db.latest(WORKOUT_PLANS_TABLE)
+
+
+# --- workout logs (logged-entries shape: structured rows, not blobs) -------
+
+WORKOUT_LOGS_TABLE = "workout_logs"
+
+
+def save_workout_log(raw_text: str, exercises: list[dict]) -> dict:
+    """Persist one logged session; returns the stored row (id used for Undo)."""
+    return db.insert(WORKOUT_LOGS_TABLE, {
+        "raw_text": raw_text,
+        "exercises": exercises,
+    })
+
+
+def delete_workout_log(log_id: str) -> None:
+    """Remove a logged session (the bot's Undo button)."""
+    db.delete(WORKOUT_LOGS_TABLE, log_id)
+
+
+def get_recent_workout_logs(limit: int = 100) -> list[dict]:
+    """Newest-first logged sessions, for history Q&A and charts."""
+    return db.list_rows(WORKOUT_LOGS_TABLE, order_col="logged_at", limit=limit)

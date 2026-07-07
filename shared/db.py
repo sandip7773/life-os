@@ -37,6 +37,11 @@ def update(table: str, row_id: str, fields: dict) -> dict:
     return result.data[0]
 
 
+def delete(table: str, row_id: str) -> None:
+    """Delete one row by id."""
+    _db().table(table).delete().eq("id", row_id).execute()
+
+
 def latest(table: str, order_col: str = "created_at") -> dict | None:
     """Newest row in a table by order_col, or None if the table is empty."""
     result = _db().table(table).select("*").order(order_col, desc=True).limit(1).execute()

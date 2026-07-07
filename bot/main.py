@@ -22,7 +22,12 @@ from telegram.ext import (
 )
 
 from modules.health.workout_generator import MODEL, build_prompt, generate_plan
-from modules.health.storage import save_workout_plan, get_latest_workout_plan
+from modules.health.storage import (
+    save_workout_plan,
+    get_latest_workout_plan,
+    save_workout_log,
+    delete_workout_log,
+)
 from modules.health.profile import get_profile, update_field, validate_field, ALLOWED_FIELDS
 from modules.health.render import render_plan_html
 from orchestrator.router import classify
@@ -127,6 +132,41 @@ async def _propose_profile_update(
     await update.effective_message.reply_text(f"Set {field} to {coerced}?", reply_markup=keyboard)
 
 
+def _format_logged_exercise(ex: dict) -> str:
+    parts = [ex["name"]]
+    if ex.get("sets") and ex.get("reps"):
+        parts.append(f"{ex['sets']}×{ex['reps']}")
+    elif ex.get("sets"):
+        parts.append(f"{ex['sets']} sets")
+    if ex.get("weight"):
+        parts.append(f"@ {ex['weight']:g}{ex.get('unit') or ''}")
+    return " ".join(parts)
+
+
+async def _log_session(update: Update, raw_text: str, exercises: list) -> None:
+    if not exercises:
+        await update.effective_message.reply_text(
+            "Sounds like a workout log, but I couldn't pick out the exercises — "
+            "try something like: did squats 5x5 at 80kg, bench 3x8 at 60kg"
+        )
+        return
+    try:
+        row = save_workout_log(raw_text, exercises)
+    except Exception:
+        log.exception("Failed to save workout log")
+        await update.effective_message.reply_text(
+            "Couldn't save that log to the database — try again in a moment."
+        )
+        return
+    lines = ["<b>Logged:</b>"] + [html.escape(_format_logged_exercise(ex)) for ex in exercises]
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Undo", callback_data=f"undo_log:{row['id']}"),
+    ]])
+    await update.effective_message.reply_text(
+        "\n".join(lines), parse_mode="HTML", reply_markup=keyboard
+    )
+
+
 async def _send_fallback_menu(update: Update, prefix: str = "") -> None:
     await update.effective_message.reply_text(
         prefix + "Not sure what you meant — here's what I can do:",
@@ -191,6 +231,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _run_profile_view(update)
     elif intent == "update_profile":
         await _propose_profile_update(update, context, result["field"], result["value"])
+    elif intent == "log_session":
+        await _log_session(update, update.message.text, result["exercises"])
     else:
         await _send_fallback_menu(update)
 
@@ -219,6 +261,14 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     elif data == "profile_confirm_no":
         context.user_data.pop("pending_profile_update", None)
         await update.effective_message.reply_text("Cancelled — no changes made.")
+    elif data.startswith("undo_log:"):
+        log_id = data.split(":", 1)[1]
+        try:
+            delete_workout_log(log_id)
+            await update.effective_message.reply_text("Undone — that session was removed.")
+        except Exception:
+            log.exception("Failed to undo workout log")
+            await update.effective_message.reply_text("Couldn't undo that log — check the dashboard.")
 
 
 def main() -> None:
