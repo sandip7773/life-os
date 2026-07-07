@@ -13,6 +13,7 @@ Older plans and legacy pre-Phase-5 rows stay read-only.
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -26,7 +27,7 @@ load_dotenv(REPO_ROOT / ".env")
 
 from shared import db
 from modules.health.profile import ALLOWED_FIELDS, get_profile, update_field
-from modules.health.storage import update_workout_plan_data
+from modules.health.storage import update_workout_plan_data, get_recent_workout_logs
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -142,6 +143,35 @@ with health:
                 label = f"Plan — {plan['created_at'][:10]}  ·  {plan['model']}"
                 with st.expander(label):
                     st.markdown(plan["plan_markdown"])
+
+        st.subheader("Progress")
+        logs = get_recent_workout_logs(limit=200)
+        points = []
+        for log_row in logs:
+            # logged_at is UTC; show local dates on the chart axis
+            local_date = datetime.fromisoformat(log_row["logged_at"]).astimezone().strftime("%Y-%m-%d")
+            for ex in log_row["exercises"]:
+                if ex.get("weight"):
+                    points.append({
+                        "date": local_date,
+                        "exercise": str(ex["name"]).strip().title(),
+                        "weight": ex["weight"],
+                    })
+        if not points:
+            st.caption(
+                "No logged sessions with weights yet — tell the bot what you "
+                "lifted (e.g. 'did squats 5x5 at 80kg') and progress shows up here."
+            )
+        else:
+            chart_df = pd.DataFrame(points)
+            exercise_names = sorted(chart_df["exercise"].unique())
+            picked = st.selectbox("Exercise", exercise_names)
+            series = (
+                chart_df[chart_df["exercise"] == picked]
+                .groupby("date", as_index=False)["weight"].max()  # heaviest set that day
+                .sort_values("date")
+            )
+            st.line_chart(series.set_index("date")["weight"])
 
     with profile_col:
         st.subheader("Training profile")

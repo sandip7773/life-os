@@ -22,6 +22,17 @@ def render_plan_html(plan_data: dict) -> str:
     return "\n".join(lines).strip()
 
 
+def render_day_html(day: dict) -> str:
+    """One training day for Telegram (used by 'what am I doing today')."""
+    lines = [f"<b>{html.escape(day['label'])} — {html.escape(day['weekday'])}</b>"]
+    for ex in day["exercises"]:
+        lines.append(
+            f"{html.escape(ex['name'])} — {ex['sets']}×{html.escape(str(ex['reps']))}, "
+            f"rest {html.escape(str(ex['rest']))}"
+        )
+    return "\n".join(lines)
+
+
 def render_plan_markdown(plan_data: dict) -> str:
     """Plain markdown for the dashboard and the plan_markdown snapshot column."""
     lines = [plan_data["summary"], ""]

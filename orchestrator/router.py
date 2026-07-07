@@ -19,6 +19,8 @@ INTENTS = (
     "show_profile",
     "update_profile",
     "log_session",
+    "whats_today",
+    "query_history",
     "unknown",
 )
 
@@ -68,6 +70,11 @@ def classify(text: str) -> dict:
   "did squats 5x5 at 80kg", "finished bench 3x8 with 60kg and some curls".
   Extract each exercise with sets/reps/weight/unit where stated (null when
   not stated). "5x5 at 80kg" means sets=5, reps="5", weight=80, unit="kg".
+- whats_today: they're asking what training is scheduled for today, e.g.
+  "what am I doing today", "what's today's session", "do I train today?"
+- query_history: they're asking about workouts they previously logged, e.g.
+  "what did I lift last week", "when did I last do squats", "how heavy was
+  my bench last time"
 - unknown: none of the above fit, or the message is unrelated/unclear
 
 Message: "{text}"

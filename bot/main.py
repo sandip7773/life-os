@@ -29,7 +29,8 @@ from modules.health.storage import (
     delete_workout_log,
 )
 from modules.health.profile import get_profile, update_field, validate_field, ALLOWED_FIELDS
-from modules.health.render import render_plan_html
+from modules.health.render import render_plan_html, render_day_html
+from modules.health.history import get_today_session, answer_history_question
 from orchestrator.router import classify
 
 load_dotenv()  # reads .env into environment variables
@@ -167,6 +168,29 @@ async def _log_session(update: Update, raw_text: str, exercises: list) -> None:
     )
 
 
+async def _run_whats_today(update: Update) -> None:
+    session = get_today_session()
+    if session["status"] == "no_plan":
+        await update.effective_message.reply_text(
+            "No plan yet — ask me for a new workout plan, or build one in the dashboard."
+        )
+    elif session["status"] == "rest":
+        await update.effective_message.reply_text(
+            f"Today ({session['weekday']}) is a rest day. "
+            f"Training days: {', '.join(session['training_days'])}."
+        )
+    else:
+        await update.effective_message.reply_text(
+            render_day_html(session["day"]), parse_mode="HTML"
+        )
+
+
+async def _run_history_question(update: Update, question: str) -> None:
+    await update.effective_message.reply_text("Checking your logs...")
+    answer = answer_history_question(question)
+    await update.effective_message.reply_text(answer)
+
+
 async def _send_fallback_menu(update: Update, prefix: str = "") -> None:
     await update.effective_message.reply_text(
         prefix + "Not sure what you meant — here's what I can do:",
@@ -233,6 +257,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _propose_profile_update(update, context, result["field"], result["value"])
     elif intent == "log_session":
         await _log_session(update, update.message.text, result["exercises"])
+    elif intent == "whats_today":
+        await _run_whats_today(update)
+    elif intent == "query_history":
+        await _run_history_question(update, update.message.text)
     else:
         await _send_fallback_menu(update)
 
