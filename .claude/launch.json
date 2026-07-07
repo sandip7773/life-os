@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "wsl",
+      "runtimeArgs": [
+        "-e", "bash", "-c",
+        "cd /mnt/c/Users/sandi/Projects/life-os && .venv/bin/python -m streamlit run dashboard/app.py --server.headless true --server.port 8501"
+      ],
+      "port": 8501
+    }
+  ]
+}
