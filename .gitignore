@@ -5,3 +5,4 @@ __pycache__/
 venv/
 .DS_Store
 workout_plan_*.md
+.claude/settings.local.json
