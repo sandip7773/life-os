@@ -18,10 +18,12 @@ A few concepts come up repeatedly — here's what they mean, briefly:
 - **Telegram bot** — the actual chat window you type into. It's the single
   front door; you never talk to a "health bot" and a "money bot" separately.
 
-- **Orchestrator** *(not built yet)* — a lightweight router that will read
-  each message and decide which module should handle it (e.g. "log 2 eggs"
-  goes to Health, "paid rent" goes to Money). Its only job is deciding where
-  a message goes — it doesn't do the actual work itself.
+- **Orchestrator** *(built, Health-only for now)* — a lightweight router
+  that reads each free-text message and decides what you *mean* (e.g. "give
+  me a leg day" = make a plan; "did squats 5x5" = log a workout; "what did I
+  lift last week" = answer from history). It uses a cheap, fast AI model to
+  classify intent, then hands off — it doesn't do the actual work itself.
+  Today it only knows Health's intents; other domains plug in later.
 
 - **Modules** — each life area (Health, Money, Career, Mentorship) is its
   own self-contained piece of code. A module knows how to do its own job
@@ -38,55 +40,61 @@ A few concepts come up repeatedly — here's what they mean, briefly:
   get permanently saved so they survive after the chat conversation ends or
   the bot restarts.
 
+- **Dashboard** — a local web page (built with Streamlit) that is the
+  *planning* surface. The AI drafts a workout plan, and you edit it there
+  exercise-by-exercise; it also shows a progress chart of your lifts. The
+  split is deliberate: **the dashboard is for planning and reviewing, the
+  bot is for quick logging and asking questions** on the go. Both read and
+  write the same database, so an edit in one shows up in the other.
+
 - **Two kinds of saved data** — the project deliberately treats these as
-  different:
-  - *Generated content*: something the AI wrote for you, saved mostly as-is
-    — like a full workout plan in Markdown. You don't need to do math on
-    this, just read it back later.
-  - *Logged entries*: facts you record about yourself, saved as structured,
-    calculable data — like "ate 2 eggs, 12g protein, 140 calories" as actual
-    numbers in a database row, not just a sentence. This matters because
-    later features (like "how much protein did I eat this week?") need to
-    add numbers up, not re-read paragraphs.
+  different, and both now exist:
+  - *Generated content*: something the AI made for you — a workout plan.
+    Stored as structured data (days, exercises, sets/reps) so you can edit
+    individual pieces, plus a readable snapshot. You mainly read it back.
+  - *Logged entries*: facts you record — "did squats 5x5 at 80kg" — saved as
+    actual numbers in a database row, not a sentence. This matters because
+    questions like "what did I lift last week?" or a progress chart need to
+    add numbers up and compare them, not re-read paragraphs.
 
-## What's built and working right now
+## What's built and working right now (Health)
 
-- **Workout plan generator** — a script that takes your fitness profile
-  (goal, experience level, days per week, equipment, etc.) and asks Claude
-  to write a personalized weekly workout plan in Markdown.
-- **Telegram `/workout` command** — the bot is live and connected; typing
-  `/workout` in Telegram triggers the generator above and sends the plan
-  back to you in chat, split into pieces if it's too long for one message.
-- **Shared AI wrapper** — the code that actually calls Claude now lives in
-  one place (`shared/llm.py`) instead of being written directly inside the
-  workout generator. This was a small cleanup so that every future feature
-  needing AI generation reuses the same wrapper instead of each one calling
-  the AI service its own way.
+The Health module is a working personal-training assistant end-to-end:
 
-## What's being built right now (Day 2b)
+- **Talk to it naturally** — you don't need to memorize commands. "Give me a
+  leg day", "what's my profile", "I want to train 4 days a week", "did squats
+  5x5 at 80kg", "what did I lift last week" all just work. (The old slash
+  commands `/workout`, `/lastplan`, `/profile` still work too, and a button
+  menu appears when it's unsure what you meant.)
+- **Workout plans** — the AI drafts a personalized weekly plan from your
+  profile (goal, experience, days/week, equipment…), saved to the database.
+  Ask for your last plan any time and it comes back instantly.
+- **Editable plans in the dashboard** — open the local dashboard and edit the
+  latest plan exercise-by-exercise (swap moves, change sets/reps, add or
+  remove days). Changes are saved and the bot sees them immediately.
+- **Session logging** — tell the bot what you actually did and it's saved as
+  structured numbers, with an Undo button in case it misheard.
+- **"What am I doing today?"** — it checks today's weekday against your plan
+  and tells you today's session (or that it's a rest day).
+- **History questions** — ask about past workouts and it answers only from
+  what you've actually logged, rather than making things up.
+- **Progress chart** — the dashboard charts your heaviest logged weight per
+  exercise over time.
+- **Editable profile** — change your training settings from either the bot
+  (in plain words) or the dashboard.
 
-Right now, if you ask for a workout plan, it's only ever in that one
-Telegram message — once the chat scrolls away, it's gone unless you saved it
-yourself. This next piece fixes that:
-
-- Every plan the bot generates gets **saved to the database** automatically.
-- A new command, **`/lastplan`**, lets you ask for your most recently saved
-  plan again, instantly — no need to regenerate it (which costs an API call
-  and takes ~30 seconds) if you just want to see it again.
-
-This depends on a few manual setup steps (unpausing the database project,
-creating the table it saves to, and adding the connection details) that
-happen outside of code, in the Supabase dashboard.
+Under the hood, all of this runs through the shared wrappers (`shared/llm.py`
+for the AI, `shared/db.py` for the database) and the thin orchestrator, so
+the next domain reuses the same machinery.
 
 ## What's next (ideas only — not committed, to be planned in detail first)
 
-- **Meal & macro logging** — describe what you ate in plain text, the AI
-  figures out the macros, and it's saved as structured numbers you can
-  total up later.
-- **Meal plan generator** — like the workout generator, but for meals, and
-  informed by what you've actually been logging.
-- **Money module** — tracking transactions and bills, following the same
-  pattern the Health module established.
+The plan is to apply the exact same pattern the Health module now proves —
+AI-drafted content you edit in the dashboard, plus natural-language logging
+and questions through the bot — to new areas:
 
-Dashboard, Career, and Mentorship modules are further out and not yet
-scoped.
+- **Meals** — meal plans you can edit, plus logging what you ate (parsed into
+  macros) and asking about it. Same shape as workouts.
+- **Money module** — tracking transactions and bills.
+- **Career and Mentorship** modules, and eventually a hosted (not just local)
+  dashboard, are further out.
